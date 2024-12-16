@@ -75,6 +75,22 @@
                 final.setuptools
               ];
             });
+
+            # Add override for bibli-ls to ensure proper installation
+            bibli-ls = prev.bibli-ls.overrideAttrs (old: {
+              nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
+                final.setuptools
+                pkgs.makeWrapper
+              ];
+
+              # Ensure the package is properly installed with its entry points
+              postInstall = ''
+                for f in $out/bin/*; do
+                  wrapProgram $f \
+                    --prefix PYTHONPATH : $PYTHONPATH:$out/${final.python.sitePackages}
+                done
+              '';
+            });
           };
 
         in
@@ -93,9 +109,21 @@
         system:
         let
           pythonSet = pythonSets.${system};
+          pkgs = nixpkgs.legacyPackages.${system};
         in
         {
-          default = pythonSet.bibli-ls;
+          default = pkgs.symlinkJoin {
+            name = "bibli-ls";
+            paths = [ pythonSet.bibli-ls ];
+            buildInputs = [ pkgs.makeWrapper ];
+            # Ensure Python path is properly set for the executable
+            postBuild = ''
+              for f in $out/bin/*; do
+                wrapProgram $f \
+                  --prefix PYTHONPATH : $PYTHONPATH:$out/${pythonSet.python.sitePackages}
+              done
+            '';
+          };
         }
       );
 
